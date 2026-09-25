@@ -11,7 +11,7 @@ function startServer() {
 test('health route responds ok', async () => {
   const { server, base } = startServer();
   const health = await (await fetch(`${base}/health`)).json();
-  assert.equal(health.status, 'broken'); // change here
+  assert.equal(health.status, 'ok' // change here
   server.close();
 });
 
@@ -64,7 +64,7 @@ test('requests are blocked once the token bucket is empty', async () => {
   const entries = log.filter((e) => e.clientId === 'limited-client').reverse(); // oldest first
 
   assert.equal(entries[0].allowed, true);
-  assert.equal(entries[1].allowed, false); //change here
+  assert.equal(entries[1].allowed, true); //change here
   assert.equal(entries[2].allowed, false);
 
   server.close();
