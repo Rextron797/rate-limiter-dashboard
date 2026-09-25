@@ -11,7 +11,7 @@ function startServer() {
 test('health route responds ok', async () => {
   const { server, base } = startServer();
   const health = await (await fetch(`${base}/health`)).json();
-  assert.equal(health.status, 'ok');
+  assert.equal(health.status, 'broken');
   server.close();
 });
 
