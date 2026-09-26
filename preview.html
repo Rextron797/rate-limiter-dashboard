@@ -1,65 +1,4 @@
-const express = require('express');
-const RateLimiter = require('./lib/rateLimiter');
-
-const app = express();
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
-
-const limiter = new RateLimiter();
-
-// seed with a couple of example rules so the dashboard isn't empty on first load
-limiter.addRule('demo-client', 5, 1); // 5 tokens, refill 1/sec
-limiter.addRule('mobile-app', 3, 0.5); // 3 tokens, refill 0.5/sec
-
-const sha = process.env.GIT_SHA || process.env.RENDER_GIT_COMMIT || 'local';
-const commit = sha.slice(0, 7);
-
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-
-function tokenBar(tokensAvailable, capacity) {
-  const pct = capacity > 0 ? Math.max(0, Math.min(100, (tokensAvailable / capacity) * 100)) : 0;
-  const color = pct > 50 ? 'var(--ok)' : pct > 20 ? 'var(--warn)' : 'var(--danger)';
-  return `<div class="bar-track">
-    <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
-  </div>`;
-}
-
-function renderPage() {
-  const rules = limiter.getRules();
-  const log = limiter.getLog();
-
-  const rulesRows = rules
-    .map(
-      (r) => `<tr>
-        <td><span class="client-id">${esc(r.clientId)}</span></td>
-        <td>${r.capacity}</td>
-        <td>${r.refillRate}/s</td>
-        <td class="tokens-cell">
-          <span class="tokens-num">${r.tokensAvailable}</span>
-          ${tokenBar(r.tokensAvailable, r.capacity)}
-        </td>
-        <td>
-          <form method="POST" action="/simulate">
-            <input type="hidden" name="clientId" value="${esc(r.clientId)}">
-            <button class="btn btn-simulate" type="submit">Simulate request</button>
-          </form>
-        </td>
-      </tr>`
-    )
-    .join('');
-
-  const logRows = log
-    .map(
-      (e) => `<tr>
-        <td class="muted">${esc(e.timestamp)}</td>
-        <td>${esc(e.clientId)}</td>
-        <td><span class="badge ${e.allowed ? 'badge-ok' : 'badge-blocked'}">${e.allowed ? 'ALLOWED' : 'BLOCKED'}</span></td>
-        <td>${e.tokensAvailable}</td>
-      </tr>`
-    )
-    .join('');
-
-  return `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -221,7 +160,39 @@ function renderPage() {
       <h2><span class="dot"></span>Client Rules</h2>
       <table>
         <tr><th>Client ID</th><th>Capacity</th><th>Refill Rate</th><th>Tokens Now</th><th>Action</th></tr>
-        ${rulesRows || '<tr><td colspan="5" class="empty">No rules yet — add one below.</td></tr>'}
+        <tr>
+        <td><span class="client-id">demo-client</span></td>
+        <td>5</td>
+        <td>1/s</td>
+        <td class="tokens-cell">
+          <span class="tokens-num">5</span>
+          <div class="bar-track">
+    <div class="bar-fill" style="width:100%;background:var(--ok)"></div>
+  </div>
+        </td>
+        <td>
+          <form method="POST" action="/simulate">
+            <input type="hidden" name="clientId" value="demo-client">
+            <button class="btn btn-simulate" type="submit">Simulate request</button>
+          </form>
+        </td>
+      </tr><tr>
+        <td><span class="client-id">mobile-app</span></td>
+        <td>3</td>
+        <td>0.5/s</td>
+        <td class="tokens-cell">
+          <span class="tokens-num">3</span>
+          <div class="bar-track">
+    <div class="bar-fill" style="width:100%;background:var(--ok)"></div>
+  </div>
+        </td>
+        <td>
+          <form method="POST" action="/simulate">
+            <input type="hidden" name="clientId" value="mobile-app">
+            <button class="btn btn-simulate" type="submit">Simulate request</button>
+          </form>
+        </td>
+      </tr>
       </table>
     </div>
 
@@ -239,56 +210,11 @@ function renderPage() {
       <h2><span class="dot" style="background:var(--warn)"></span>Request Log</h2>
       <table>
         <tr><th>Time</th><th>Client</th><th>Result</th><th>Tokens Left</th></tr>
-        ${logRows || '<tr><td colspan="4" class="empty">No requests simulated yet.</td></tr>'}
+        <tr><td colspan="4" class="empty">No requests simulated yet.</td></tr>
       </table>
     </div>
 
-    <footer>commit <code>${commit}</code></footer>
+    <footer>commit <code>local</code></footer>
   </div>
 </body>
-</html>`;
-}
-
-app.get('/', (req, res) => {
-  res.send(renderPage());
-});
-
-app.post('/rules', (req, res) => {
-  const { clientId, capacity, refillRate } = req.body;
-  if (!clientId || !capacity || !refillRate) {
-    return res.status(400).send('clientId, capacity and refillRate are required');
-  }
-  try {
-    limiter.addRule(clientId, Number(capacity), Number(refillRate));
-  } catch (err) {
-    return res.status(400).send(err.message);
-  }
-  res.redirect('/');
-});
-
-app.post('/simulate', (req, res) => {
-  const { clientId } = req.body;
-  if (!clientId) {
-    return res.status(400).send('clientId is required');
-  }
-  try {
-    limiter.allow(clientId);
-  } catch (err) {
-    return res.status(400).send(err.message);
-  }
-  res.redirect('/');
-});
-
-app.get('/api/rules', (req, res) => {
-  res.json(limiter.getRules());
-});
-
-app.get('/api/log', (req, res) => {
-  res.json(limiter.getLog());
-});
-
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', commit });
-});
-
-module.exports = app;
+</html>
